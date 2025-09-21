@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>הזמנה חדשה - ח.סבן</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --brand: #0b72b9; --accent: #ff9f1c; --bg: #f0f2f5; --card: #ffffff;
+            --text-dark: #1a202c; --text-light: #4a5568; --text-muted: #718096;
+            --border: #e2e8f0; --success: #38a169;
+            --radius: 16px; --shadow: 0 10px 15px -3px rgba(0,0,0,0.07);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Assistant', sans-serif; background-color: var(--bg); color: var(--text-dark); }
+
+        .app-container { max-width: 500px; margin: 0 auto; background-color: white; min-height: 100vh; }
+        .main-header { padding: 20px; text-align: center; border-bottom: 1px solid var(--border); }
+        .main-content { padding: 20px; }
+
+        /* Project Selection Popup */
+        .popup-overlay {
+            position: fixed; inset: 0; background-color: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
+            display: flex; align-items: center; justify-content: center; z-index: 100;
+            opacity: 0; visibility: hidden; transition: all 0.3s ease;
+        }
+        .popup-overlay.visible { opacity: 1; visibility: visible; }
+        .popup-content { background: var(--card); padding: 20px; border-radius: var(--radius); width: 90%; }
+        .popup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .popup-box {
+            padding: 20px; border-radius: 12px; text-align: center; font-weight: 700;
+            font-size: 18px; border: 1px solid var(--border); cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .popup-box:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+        .popup-box .icon { font-size: 48px; }
+
+        /* Multi-step Form */
+        .form-step { display: none; animation: fadeIn 0.5s; }
+        .form-step.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 8px; }
+        .form-group input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
+
+        .form-navigation { display: flex; justify-content: space-between; margin-top: 30px; }
+        .btn { background: var(--brand); color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 700; }
+        .btn.secondary { background-color: var(--text-muted); }
+
+        /* Product Input */
+        .product-item { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+        .product-item input { flex-grow: 1; }
+        .product-status-icon { font-size: 20px; animation: blink 1.5s infinite; }
+        @keyframes blink { 50% { opacity: 0.3; } }
+
+        /* Review Screen */
+        .review-screen { border: 1px solid var(--border); padding: 20px; border-radius: 12px; background: #fafafa; }
+        .review-screen h4 { border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 10px; }
+
+        /* Status Sending Animation */
+        #sendStatus { display: none; padding: 20px; text-align: center; }
+        #statusText { font-weight: 600; margin-bottom: 10px; }
+        .progress-bar-container { width: 100%; background: #ccc; border-radius: 10px; overflow: hidden; }
+        #progressBar { width: 0%; height: 10px; background: var(--brand); transition: width 0.3s; }
+
+        /* Success Popup */
+        .success-popup {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: var(--success); color: white; padding: 15px 25px; border-radius: var(--radius);
+            z-index: 200; box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            opacity: 0; visibility: hidden; transition: all 0.4s ease;
+        }
+        .success-popup.visible { opacity: 1; visibility: visible; transform: translate(-50%, -10px); }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header class="main-header">
+            <button id="open-project-popup" class="btn">פרויקט: העם הצרפתי ▾</button>
+        </header>
+
+        <main class="main-content">
+            <!-- This is where the form steps will be injected -->
+            <div id="form-container">
+                <h2>ברוך הבא, ערן</h2>
+                <p>בחר מה ברצונך להזמין.</p>
+                <!-- Status box will appear here -->
+                <div id="order-status-box"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Project Selection Popup -->
+    <div id="project-popup" class="popup-overlay">
+        <div class="popup-content">
+            <h3>מה תרצה להזמין?</h3>
+            <div class="popup-grid">
+                <div class="popup-box" id="order-container-btn">
+                    <div class="icon">🛻</div>
+                    <div>הזמנת מכולה</div>
+                </div>
+                <div class="popup-box" id="order-materials-btn">
+                    <div class="icon">🧱</div>
+                    <div>חומרי בניין</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Popup (initially hidden) -->
+    <div id="success-popup" class="success-popup">
+        ✅ ההזמנה נשלחה בהצלחה!
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const dom = {
+                formContainer: document.getElementById('form-container'),
+                projectPopup: document.getElementById('project-popup'),
+                openProjectPopupBtn: document.getElementById('open-project-popup'),
+                orderMaterialsBtn: document.getElementById('order-materials-btn'),
+                successPopup: document.getElementById('success-popup'),
+            };
+
+            let currentStep = 0;
+            const formSteps = [
+                // Step 1: Project Details
+                `
+                <div class="form-step active">
+                    <h2>שלב 1: פרטי אספקה</h2>
+                    <div class="form-group">
+                        <label>כתובת</label>
+                        <input type="text" value="העם הצרפתי 64, רמת גן" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>איש קשר באתר</label>
+                        <input type="text" placeholder="לדוגמה: משה לוי">
+                    </div>
+                    <div class="form-navigation">
+                        <button class="btn" onclick="nextStep()">הבא</button>
+                    </div>
+                </div>
+                `,
+                // Step 2: Product Selection
+                `
+                <div class="form-step">
+                    <h2>שלב 2: בחירת מוצרים</h2>
+                    <p>הקלד שם מוצר או הדבק רשימה מהודעות:</p>
+                    <div class="form-group">
+                        <textarea id="smart-input" rows="5" placeholder="לדוגמה:\nבלוק 20 - 150 יח'\nמלט - 10 שקים\nחול - 2 בלות"></textarea>
+                    </div>
+                    <div id="product-list">
+                         <div class="product-item">
+                            <input type="text" value="בלוק איטונג 20 סמ" readonly>
+                            <input type="number" value="150" style="width: 80px;">
+                            <span class="product-status-icon"></span>
+                        </div>
+                        <div class="product-item">
+                            <input type="text" value="חצץ 4 טון">
+                            <input type="number" value="" style="width: 80px;" disabled>
+                            <span class="product-status-icon">⚡</span>
+                        </div>
+                    </div>
+                    <div class="form-navigation">
+                        <button class="btn secondary" onclick="prevStep()">הקודם</button>
+                        <button class="btn" onclick="nextStep()">הבא</button>
+                    </div>
+                </div>
+                `,
+                // Step 3: Review
+                `
+                <div class="form-step">
+                    <h2>שלב 3: שיקוף ואישור</h2>
+                    <div class="review-screen">
+                        <h4>סיכום הזמנה</h4>
+                        <p><strong>לקוח:</strong> ערן אזולאי</p>
+                        <p><strong>פרויקט:</strong> העם הצרפתי</p>
+                        <hr style="margin: 10px 0;">
+                        <h4>פריטים:</h4>
+                        <p>• בלוק איטונג 20 ס"מ (150 יחידות)</p>
+                        <p>• חצץ 4 טון (לא זוהה במערכת)</p>
+                        <hr style="margin: 10px 0;">
+                        <h4>הערות</h4>
+                        <textarea rows="3" placeholder="הערות למנהל ההזמנות..."></textarea>
+                    </div>
+                    <div class="form-navigation">
+                        <button class="btn secondary" onclick="prevStep()">הקודם</button>
+                        <button class="btn" onclick="sendOrder()">שלח הזמנה</button>
+                    </div>
+                </div>
+                `,
+                // Step 4: Sending Animation
+                `
+                <div class="form-step">
+                    <div id="sendStatus">
+                      <div id="statusText">שולח הזמנה...</div>
+                      <div class="progress-bar-container">
+                        <div id="progressBar"></div>
+                      </div>
+                    </div>
+                </div>
+                `
+            ];
+
+            function renderStep() {
+                dom.formContainer.innerHTML = formSteps[currentStep];
+            }
+
+            window.nextStep = () => {
+                if (currentStep < formSteps.length - 1) {
+                    currentStep++;
+                    renderStep();
+                }
+            };
+
+            window.prevStep = () => {
+                if (currentStep > 0) {
+                    currentStep--;
+                    renderStep();
+                }
+            };
+            
+            window.sendOrder = () => {
+                currentStep = 3; // Move to the sending animation step
+                renderStep();
+
+                // --- This is where the magic happens ---
+                const sendStatusDiv = document.getElementById('sendStatus');
+                sendStatusDiv.style.display = 'block';
+
+                const bar = document.getElementById('progressBar');
+                const text = document.getElementById('statusText');
+                let progress = 0;
+
+                text.innerText = "יוצר קשר עם המערכת...";
+                
+                // Simulate API calls and progress
+                setTimeout(() => { text.innerText = 'מאמת פרטי הזמנה...'; bar.style.width = '30%'; }, 500);
+                setTimeout(() => { text.innerText = 'שומר במערכת ושולח למנהל...'; bar.style.width = '70%'; }, 1500);
+                setTimeout(() => { text.innerText = '✅ ההזמנה נשלחה בהצלחה!'; bar.style.width = '100%'; }, 2500);
+
+                setTimeout(() => {
+                    // Show success popup
+                    dom.successPopup.classList.add('visible');
+                    // Hide it after a few seconds
+                    setTimeout(() => {
+                        dom.successPopup.classList.remove('visible');
+                        // Reset to main screen
+                        currentStep = 0;
+                        dom.formContainer.innerHTML = '<h2>תודה!</h2><p>ההזמנה התקבלה וממתינה לאישור.</p>';
+                    }, 4000);
+                }, 3000);
+                
+                // In a real app, you would call your Cloud Function here.
+                // submitOrderToCloud({ ...orderData });
+            };
+
+            // Event Listeners
+            dom.openProjectPopupBtn.addEventListener('click', () => {
+                dom.projectPopup.classList.add('visible');
+            });
+
+            dom.projectPopup.addEventListener('click', (e) => {
+                if (e.target === dom.projectPopup) {
+                    dom.projectPopup.classList.remove('visible');
+                }
+            });
+
+            dom.orderMaterialsBtn.addEventListener('click', () => {
+                dom.projectPopup.classList.remove('visible');
+                currentStep = 0;
+                renderStep();
+            });
+
+        });
+    </script>
+</body>
+</html>
