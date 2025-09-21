@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM - ניהול הזמנות</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #1e3a8a; --secondary: #1d4ed8; --accent: #f59e0b;
+            --bg-light: #f1f5f9; --bg-dark: #0f172a; --card: #ffffff;
+            --text-light: #f8fafc; --text-dark: #1e293b; --text-muted: #64748b;
+            --border: #e2e8f0; --success: #16a34a; --warning: #f97316; --danger: #dc2626;
+            --radius: 12px; --shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+            --sidebar-width: 260px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        body { 
+            font-family: 'Assistant', sans-serif; background-color: var(--bg-light); 
+            color: var(--text-dark); display: flex; height: 100vh; overflow: hidden;
+        }
+
+        #sidebar {
+            width: var(--sidebar-width); background-color: var(--bg-dark); color: var(--text-light);
+            display: flex; flex-direction: column; padding: 20px 10px; transition: transform 0.3s ease;
+            transform: translateX(0); z-index: 1000;
+        }
+
+        .sidebar-header { text-align: center; margin-bottom: 30px; }
+        .sidebar-header h1 { font-size: 24px; }
+        .sidebar-nav { flex-grow: 1; }
+        .nav-link {
+            display: flex; align-items: center; gap: 12px; padding: 12px 15px;
+            color: var(--text-light); text-decoration: none; border-radius: 8px;
+            margin-bottom: 8px; font-weight: 600; transition: background-color 0.2s;
+        }
+        .nav-link:hover { background-color: rgba(255,255,255,0.1); }
+        .nav-link.active { background-color: var(--secondary); }
+        .nav-link svg { width: 22px; height: 22px; }
+        .sidebar-footer { text-align: center; font-size: 14px; }
+        
+        #main-content {
+            flex-grow: 1; display: flex; flex-direction: column; overflow: hidden;
+            position: relative;
+        }
+        
+        .main-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px 25px; background-color: var(--card); border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        
+        #menu-toggle { display: none; background: none; border: none; cursor: pointer; }
+        
+        .page {
+            position: absolute; inset: 0; overflow-y: auto;
+            padding: 25px; display: none;
+        }
+        .page.active { display: block; animation: fadeIn 0.4s; }
+        
+        .kanban-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+        .kanban-column { background-color: #f8fafc; border-radius: var(--radius); display: flex; flex-direction: column; border: 1px solid var(--border); }
+        .column-title { padding: 15px; font-weight: 700; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+        .column-content { padding: 15px; flex-grow: 1; overflow-y: auto; min-height: 200px; }
+
+        .kanban-card { 
+            background-color: var(--card); border-radius: var(--radius); padding: 15px; 
+            box-shadow: var(--shadow); margin-bottom: 15px; border-right: 5px solid;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .kanban-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+        }
+        .kanban-card[data-type="container-service"] { border-right-color: var(--accent); }
+        .kanban-card[data-type="building-materials"] { border-right-color: var(--primary); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .card-title { font-weight: 700; font-size: 1.1rem; }
+        .card-timestamp { font-size: 12px; color: var(--text-muted); }
+        .card-details { margin-bottom: 12px; }
+        .card-footer { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .handled-by { font-size: 12px; font-style: italic; color: var(--text-muted); }
+        .btn { border:none; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: filter 0.2s; }
+        .btn:hover { filter: brightness(1.1); }
+        
+        .form-container { max-width: 800px; margin: 0 auto; }
+        .form-section { background-color: var(--card); padding: 25px; border-radius: var(--radius); margin-bottom: 25px; box-shadow: var(--shadow); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 5px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-family: 'Assistant', sans-serif; }
+        
+        .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; }
+        
+        #log-container { background: #1e293b; color: #e2e8f0; border-radius: var(--radius); padding: 20px; font-family: monospace; white-space: pre-wrap; height: 100%; }
+        
+        @media (max-width: 768px) {
+            #sidebar {
+                position: fixed; height: 100%;
+                transform: translateX(100%); /* Start off-screen to the right for RTL */
+            }
+            #sidebar.open { transform: translateX(0); }
+            #main-content { width: 100%; }
+            #menu-toggle { display: block; }
+        }
+
+        /* Other reused styles */
+        #toast-container { position: fixed; bottom: 20px; left: 20px; z-index: 2000; }
+        /* Modal, Toast etc. would go here if needed */
+
+    </style>
+</head>
+<body>
+
+    <aside id="sidebar">
+        <div class="sidebar-header"><h1>CRM סבן</h1></div>
+        <nav class="sidebar-nav">
+            <a href="#" class="nav-link active" data-page="page-board">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+                <span>לוח בקרה</span>
+            </a>
+            <a href="#" class="nav-link" data-page="page-new-order">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                <span>הזמנה חדשה</span>
+            </a>
+            <a href="#" class="nav-link" data-page="page-analytics">
+                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                <span>ניתוח נתונים</span>
+            </a>
+             <a href="#" class="nav-link" data-page="page-logs">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                <span>יומן פעילות</span>
+            </a>
+        </nav>
+        <div class="sidebar-footer" id="manager-name-display">לא מחובר</div>
+    </aside>
+
+    <main id="main-content">
+        <header class="main-header">
+            <button id="menu-toggle">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+            <h2 id="page-title-header">לוח בקרה</h2>
+            <div id="stats-container" style="display: flex; gap: 20px;"></div>
+        </header>
+
+        <div id="page-board" class="page active">
+            <div class="kanban-board">
+                <div class="kanban-column"><h2 class="column-title">⏳<span>ממתין לאישור</span></h2><div class="column-content" id="awaiting-approval-container"></div></div>
+                <div class="kanban-column"><h2 class="column-title">🧑‍🍳<span>בהכנה</span></h2><div class="column-content" id="in-preparation-container"></div></div>
+                <div class="kanban-column"><h2 class="column-title">✅<span>הושלמו</span></h2><div class="column-content" id="completed-container"></div></div>
+            </div>
+        </div>
+
+        <div id="page-new-order" class="page">
+            <div class="form-container">
+                <div class="form-section">
+                    <h3>פרטי הזמנה</h3>
+                    <div class="form-group">
+                        <label for="client-name-input">שם לקוח</label>
+                        <input type="text" id="client-name-input" placeholder="לדוגמה: ישראל ישראלי">
+                    </div>
+                     <div class="form-group">
+                        <label>סוג הובלה</label>
+                        <select id="delivery-type-select">
+                            <option value="manual">פריקה ידנית</option>
+                            <option value="crane">הובלת מנוף</option>
+                        </select>
+                    </div>
+                </div>
+                 <div class="form-section">
+                    <h3>מוצרים</h3>
+                     <div id="product-selection-container"></div>
+                </div>
+                <button id="submit-new-order-btn" class="btn" style="width: 100%; padding: 15px; font-size: 18px; background-color: var(--primary); color: white;">צור הזמנה</button>
+            </div>
+        </div>
+
+        <div id="page-analytics" class="page">
+             <div class="charts-grid">
+                <div class="form-section"><canvas id="requests-by-type-chart"></canvas></div>
+                <div class="form-section"><canvas id="requests-per-day-chart"></canvas></div>
+            </div>
+        </div>
+
+        <div id="page-logs" class="page">
+            <div id="log-container">יומן פעילות יטען כאן...</div>
+        </div>
+    </main>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyDy3k1AoEKeuCKjmFxefn9fapeqv2Le1_w",
+            authDomain: "hsaban94-cc777.firebaseapp.com",
+            projectId: "hsaban94-cc777",
+            storageBucket: "hsaban94-cc777.appspot.com",
+            messagingSenderId: "299206369469",
+            appId: "1:299206369469:web:50ca90c58f1981ec9457d4"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // This catalog can be fetched from a cloud function connected to your Google Sheet
+        const productCatalog = [
+            { sku: 'CEMENT-50KG', name: 'שק מלט 50 ק"ג', unit: 'שקים' },
+            { sku: 'SAND-BAG', name: 'שק חול', unit: 'שקים' },
+            { sku: 'GRAVEL-BAG', name: 'שק חצץ (סומסום)', unit: 'שקים' },
+            { sku: 'BLOCK-ITNG-20', name: 'בלוק איטונג 20 ס"מ', unit: 'יחידות' },
+            { sku: 'REBAR-12MM', name: 'מוט ברזל 12 מ"מ', unit: 'מוטות' },
+            { sku: 'PLASTER-25KG', name: 'שליכט צבעוני 25 ק"ג', unit: 'דליים' },
+        ];
+        
+        let allRequests = {};
+        let managerName = '';
+        let activityLog = [];
+        let audioCtx;
+
+        function init() {
+            setupEventListeners();
+            identifyManager();
+            listenToRequests();
+            renderProductCatalogForManager();
+        }
+
+        function identifyManager() {
+             managerName = sessionStorage.getItem('managerName');
+             if (!managerName) {
+                managerName = prompt("אנא הזן את שמך:", "מנהל") || "מנהל ראשי";
+                sessionStorage.setItem('managerName', managerName);
+             }
+            document.getElementById('manager-name-display').textContent = `מחובר: ${managerName}`;
+        }
+        
+        function setupEventListeners() {
+            // Navigation
+            const navLinks = document.querySelectorAll('.nav-link');
+            navLinks.forEach(link => {
+                link.addEventListener('click', e => {
+                    e.preventDefault();
+                    const pageId = link.dataset.page;
+                    document.querySelector('.nav-link.active').classList.remove('active');
+                    link.classList.add('active');
+                    document.querySelector('.page.active').classList.remove('active');
+                    document.getElementById(pageId).classList.add('active');
+                    document.getElementById('page-title-header').textContent = link.querySelector('span').textContent;
+                });
+            });
+
+            // Mobile menu
+            const sidebar = document.getElementById('sidebar');
+            document.getElementById('menu-toggle').addEventListener('click', () => sidebar.classList.toggle('open'));
+            document.body.addEventListener('click', (e) => {
+                if(sidebar.classList.contains('open') && !sidebar.contains(e.target) && e.target.id !== 'menu-toggle') {
+                    sidebar.classList.remove('open');
+                }
+            });
+            
+            // Actions
+            document.body.addEventListener('click', (e) => {
+                const actionBtn = e.target.closest('[data-action]');
+                if(!actionBtn) return;
+
+                const id = actionBtn.dataset.id;
+                const action = actionBtn.dataset.action;
+
+                if (action === 'approve') {
+                    updateRequest(id, 'in-preparation');
+                } else if (action === 'complete') {
+                    updateRequest(id, 'completed');
+                } else if (action === 'share') {
+                    shareToWhatsApp(id);
+                }
+            });
+            
+            document.getElementById('submit-new-order-btn').addEventListener('click', createNewOrderFromManager);
+        }
+
+        function listenToRequests() {
+            const q = query(collection(db, "clientRequests"), orderBy("timestamp", "desc"));
+            onSnapshot(q, (snapshot) => {
+                allRequests = {};
+                snapshot.forEach(doc => {
+                    allRequests[doc.id] = { id: doc.id, ...doc.data() };
+                });
+
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === "added" && change.doc.data().status === 'awaiting-approval') {
+                        playNotificationSound();
+                        const data = change.doc.data();
+                        logActivity(`בקשה חדשה התקבלה מ: ${data.clientName}`);
+                    }
+                });
+                
+                renderKanbanBoard();
+                renderAnalyticsCharts();
+                renderLogs();
+            }, (error) => {
+                console.error("Firestore listener error: ", error);
+                logActivity("שגיאת התחברות למסד הנתונים.", 'error');
+            });
+        }
+        
+        function renderKanbanBoard() {
+            const containers = {
+                'awaiting-approval': document.getElementById('awaiting-approval-container'),
+                'in-preparation': document.getElementById('in-preparation-container'),
+                'completed': document.getElementById('completed-container')
+            };
+            Object.values(containers).forEach(c => c.innerHTML = '');
+
+            for (const id in allRequests) {
+                const request = allRequests[id];
+                const container = containers[request.status];
+                if (container) {
+                    container.innerHTML += createRequestCard(request);
+                }
+            }
+        }
+
+        function createRequestCard(request) {
+            let detailsHtml = '';
+            if (request.orderType === 'building-materials' && request.items) {
+                detailsHtml = `<ul>${request.items.map(item => `<li>${item.name} (כמות: ${item.quantity})</li>`).join('')}</ul>`;
+            } else {
+                detailsHtml = `<p>${request.details || `בקשת ${request.requestType}`}</p>`;
+            }
+            
+            const handledByText = request.handledBy ? `טופל לאחרונה ע"י: ${request.handledBy}` : '';
+
+            return `
+                <div class="kanban-card" data-type="${request.orderType || 'container-service'}">
+                    <div class="card-header">
+                        <strong class="card-title">${request.clientName}</strong>
+                        <span class="card-timestamp">${new Date(request.timestamp?.toDate()).toLocaleString('he-IL')}</span>
+                    </div>
+                    <div class="card-details">${detailsHtml}</div>
+                    <div class="card-footer">
+                        <div class="handled-by">${handledByText}</div>
+                        <div style="display:flex; gap: 10px;">
+                            ${request.status === 'awaiting-approval' ? `<button class="btn" data-action="approve" data-id="${request.id}" style="background-color: var(--primary); color: white;">אשר</button>` : ''}
+                            ${request.status === 'in-preparation' ? `<button class="btn" data-action="complete" data-id="${request.id}" style="background-color: var(--success); color: white;">השלם</button>` : ''}
+                            <button class="btn" data-action="share" data-id="${request.id}" style="background-color: #25D366; color: white;">שתף</button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function shareToWhatsApp(id) {
+            const request = allRequests[id];
+            if (!request) return;
+
+            let message = `*📦 הזמנה לטיפול מח.סבן 📦*\n\n`;
+            message += `*👤 לקוח:* ${request.clientName}\n`;
+            message += `*📞 טלפון:* ${request.clientPhone || 'לא צוין'}\n`;
+            
+            if (request.orderType === 'building-materials') {
+                message += `*📋 סוג הזמנה:* חומרי בניין\n`;
+                if(request.items) {
+                    message += `*🧱 פירוט:*\n`;
+                    message += request.items.map(item => `  • ${item.name} (${item.quantity} ${item.unit})`).join('\n');
+                }
+            } else {
+                message += `*📋 סוג הזמנה:* שירותי מכולה\n`;
+                message += `*📝 פרטים:* ${request.details}\n`;
+            }
+
+            const encodedMessage = encodeURIComponent(message);
+            window.open(`https://api.whatsapp.com/send?text=${encodedMessage}`, '_blank');
+            logActivity(`הזמנה ${id} שותפה לוואטסאפ`);
+        }
+
+        function renderProductCatalogForManager() {
+            const container = document.getElementById('product-selection-container');
+            container.innerHTML = productCatalog.map(p => `
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                    <label style="flex-grow: 1;">${p.name}</label>
+                    <input type="number" data-sku="${p.sku}" data-name="${p.name}" data-unit="${p.unit}" min="0" placeholder="0" style="width: 80px;">
+                </div>
+            `).join('');
+        }
+        
+        async function createNewOrderFromManager() {
+            const clientName = document.getElementById('client-name-input').value;
+            if(!clientName) { alert('יש להזין שם לקוח'); return; }
+
+            const items = [];
+            document.querySelectorAll('#product-selection-container input').forEach(input => {
+                const quantity = parseInt(input.value, 10);
+                if (quantity > 0) {
+                    items.push({ sku: input.dataset.sku, name: input.dataset.name, unit: input.dataset.unit, quantity: quantity });
+                }
+            });
+
+            if(items.length === 0) { alert('יש להוסיף לפחות מוצר אחד להזמנה'); return; }
+            
+            const payload = {
+                clientName: clientName,
+                timestamp: serverTimestamp(),
+                status: "awaiting-approval",
+                orderType: "building-materials",
+                deliveryType: document.getElementById('delivery-type-select').value,
+                items: items,
+                createdBy: managerName,
+                updates: [
+                    { status: "awaiting-approval", timestamp: new Date(), updatedBy: managerName }
+                ]
+            };
+
+            try {
+                await addDoc(collection(db, "clientRequests"), payload);
+                alert('הזמנה נוצרה בהצלחה!');
+                logActivity(`הזמנה חדשה נוצרה ידנית עבור ${clientName}`);
+            } catch (e) {
+                console.error(e);
+                alert('שגיאה ביצירת הזמנה');
+            }
+        }
+        
+        async function updateRequest(id, newStatus) {
+            const requestRef = doc(db, "clientRequests", id);
+            const updatePayload = {
+                status: newStatus,
+                handledBy: managerName,
+                // This uses arrayUnion to add a new update object to the 'updates' array.
+                // This is the foundation for the client app to show status changes.
+                updates: arrayUnion({
+                    status: newStatus,
+                    timestamp: new Date(),
+                    updatedBy: managerName
+                })
+            };
+            try {
+                await updateDoc(requestRef, updatePayload);
+                logActivity(`סטטוס הזמנה ${id} עודכן ל-${newStatus}`);
+            } catch(e) { 
+                console.error("Error updating document: ", e);
+                logActivity(`שגיאה בעדכון הזמנה ${id}`, 'error');
+            }
+        }
+
+        function renderAnalyticsCharts() {
+            // Chart 1: Requests by Type
+            const typeCounts = { 'building-materials': 0, 'container-service': 0 };
+            Object.values(allRequests).forEach(r => {
+                typeCounts[r.orderType || 'container-service']++;
+            });
+
+            const typeChartCtx = document.getElementById('requests-by-type-chart');
+            if(typeChartCtx.chart) typeChartCtx.chart.destroy(); // Destroy previous chart instance
+            typeChartCtx.chart = new Chart(typeChartCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['חומרי בניין', 'שירותי מכולה'],
+                    datasets: [{
+                        data: [typeCounts['building-materials'], typeCounts['container-service']],
+                        backgroundColor: [ 'var(--primary)', 'var(--accent)' ]
+                    }]
+                },
+                options: { responsive: true, plugins: { title: { display: true, text: 'הזמנות לפי סוג' } } }
+            });
+        }
+        
+        function logActivity(message, level = 'info') {
+            const timestamp = new Date().toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'medium'});
+            activityLog.unshift({ timestamp, message, level });
+            if (activityLog.length > 100) activityLog.pop(); // Limit log size
+            renderLogs();
+        }
+
+        function renderLogs() {
+            document.getElementById('log-container').innerHTML = activityLog.map(log => `[${log.timestamp}] ${log.message}`).join('\n');
+        }
+
+        function playNotificationSound() {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                // More noticeable sound
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                oscillator.type = 'sine';
+                
+                // First tone
+                oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+                oscillator.start(audioCtx.currentTime);
+                
+                // Second tone
+                oscillator.frequency.setValueAtTime(1000, audioCtx.currentTime + 0.1);
+                
+                oscillator.stop(audioCtx.currentTime + 0.2);
+            } catch(e) {
+                console.warn("Could not play sound, user interaction might be needed first.", e);
+            }
+        }
+
+        // Initialize App
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
+
